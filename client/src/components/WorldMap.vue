@@ -2,23 +2,30 @@
   <div>
     <div class="map" :class="{'full-size': isFullSize}">
       <div class="full-size-btn" @click="isFullSize = !isFullSize">toggle full size</div>
+      <img v-for="house in houses"
+           v-bind:src="getImgUrl(house.flag)"
+           v-bind:key="house.id"
+           :alt="house.name"
+           :style="{position: 'absolute', left: housePosition(house.position.x) + 'px' ,top: housePosition(house.position.y) + 'px' }"
+      >
     </div>
   </div>
 </template>
 
 <script lang="ts">
 	import {Component, Prop, Vue} from 'vue-property-decorator';
-  import House from '../models/House';
+    import House from '../models/House';
 
 	@Component({
 		name: 'world-map'
-	})
+    })
 	export default class WorldMap extends Vue {
 		@Prop() houses!: House[];
 		isFullSize?: boolean = false;
 
-		housePosition(house: House) {
+		housePosition(positionInPx: number) {
 			const ratio = this.isFullSize ? 2.5 : 1;
+			return positionInPx * ratio;
 		}
 
 		getImgUrl(img: string) {
@@ -51,6 +58,10 @@
       color: #a58e64;
       background-color: #775f3c;
       padding: 3px;
+    }
+    img{
+      height: 50px;
+      width: 50px;
     }
   }
 </style>

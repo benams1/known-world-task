@@ -1,22 +1,26 @@
 import Vue from 'vue';
 import Vuex from 'vuex';
-import data from '../../public/init.json';
 import House from '../models/House';
 import {IPoint} from '../models/IPoint';
 import moment from 'moment';
 import axios from 'axios';
+import {IUpdate} from "../models/IUpdate";
+import { io } from "socket.io-client";
 
-let serverURL = '';
+let serverApiURL = '';
+let serverBaseURL = '';
 
 if (process.env.VUE_APP_GITPOD_WORKSPACE_URL && process.env.VUE_APP_SERVER_PORT) {
     const appendPort = process.env.VUE_APP_SERVER_PORT + '-';
     const base = process.env.VUE_APP_GITPOD_WORKSPACE_URL;
-    serverURL = [base.slice(0, 8), appendPort, base.slice(8)].join('');
-    serverURL += '/api'
+	serverBaseURL = [base.slice(0, 8), appendPort, base.slice(8)].join('');
+	serverApiURL = serverBaseURL + '/api'
 } else {
-    serverURL =  'http://localhost:3000/api/';
+	serverBaseURL =  'http://localhost:3000/';
+	serverApiURL = serverBaseURL + 'api/'
 }
-
+const socket = io(serverBaseURL);
+console.log('socket', socket)
 
 Vue.use(Vuex);
 
@@ -24,11 +28,7 @@ export interface IStore {
 	kingsLandingPosition: IPoint;
 	winner: House | undefined;
 	houses: House[];
-	updates: {
-		house: House;
-		steps: number;
-		score: number;
-	}[];
+	updates: IUpdate[];
 }
 
 export default new Vuex.Store({
@@ -52,6 +52,8 @@ export default new Vuex.Store({
 		},
 		seWinner(state, house) {
 			state.winner = house;
+			axios.post(`${serverApiURL}/stop/updates`,{})
+			window.alert(`The house ${house.name} is won`);
 		},
 		updateHouse(state, house) {
 			const i = state.houses.findIndex(item => item.id === house.id);
@@ -59,34 +61,30 @@ export default new Vuex.Store({
 				Vue.set(state.houses, i, house);
 			}
 		},
-		createNewUpdate(state) {
+		createNewUpdate(state, update) {
 			if (state.winner) {
 				return;
 			}
-			const randHouse: House = state.houses[Math.floor(Math.random() * state.houses.length)];
-			const max = 10;
-			const min = 5;
-			const randSteps: number = randHouse.name !== 'Lannister'
-				 ? Math.floor(Math.random() * (max - min) + min) * randHouse.strength : 0;
-			const update = {house: randHouse, steps: randSteps, score: randSteps + 100, timestamp: moment()};
+			update.timestamp = moment(update.timestamp)
 			state.updates.push(update);
 		}
 	},
 	actions: {
 		initUpdates({commit, state}) {
-			(function loop() {
-					const rand = Math.round(Math.random() * (3000 - 500)) + 500;
-					setTimeout(function () {
-						commit('createNewUpdate');
-						if (!state.winner) loop();
-					}, rand);
-			}());
-		},
-		getHouses(context) {
-			const houses: House[] = data['houses'].map((house: any) => new House(house));
-            context.commit('setHouses', houses);
+			socket.on( 'message',(message) => {
+				commit('createNewUpdate', message);
+			})
 
-            return houses;
+		},
+		async getHouses(context) {
+			try {
+				const response = await axios.get(serverApiURL)
+				const houses: House[] = response.data['houses'].map((house: object) => new House(house));
+				context.commit('setHouses', houses);
+				return houses;
+			} catch (e) {
+				console.log('error', e);
+			}
 		},
 		updateHouse(context, house) {
 			context.commit('updateHouse', house);
